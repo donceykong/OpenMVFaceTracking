@@ -1,0 +1,81 @@
+# Doncey Albin, (9/12/2020)
+#
+#
+# This is a test of using face tracking to pan a servo motor
+
+import time
+from pyb import Servo
+import sensor, time, image
+
+# Reset sensor
+sensor.reset()
+
+# Sensor settings
+sensor.set_contrast(3)
+sensor.set_gainceiling(16)
+# HQVGA and GRAYSCALE are the best for face tracking.
+sensor.set_framesize(sensor.HQVGA)
+sensor.set_pixformat(sensor.GRAYSCALE)
+
+# Load Haar Cascade
+# By default this will use all stages, lower satges is faster but less accurate.
+face_cascade = image.HaarCascade`("frontalface", stages=25)
+print(face_cascade)
+
+# Set servos
+s1 = Servo(1) # P7
+s2 = Servo(2) # P8
+xPosToPulse = 1500 #Initial x-pos of Pan Servo (Center)
+yPosToPulse = 1500 #Initial y-pos of Tilt Servo (Center)
+
+# FPS clock
+clock = time.clock()
+
+while (True):
+    clock.tick()
+
+    # Capture snapshot
+    img = sensor.snapshot()
+
+    # Find objects.
+    # Note: Lower scale factor scales-down the image more and detects smaller objects.
+    # Higher threshold results in a higher detection rate, with more false positives.
+    objects = img.find_features(face_cascade, threshold=0.75, scale_factor=1.25)
+
+    # Draw objects
+    for r in objects:
+        img.draw_rectangle(r)
+
+    # Print FPS.
+    # Note: Actual FPS is higher, streaming the FB makes it slower.
+    # print(clock.fps())
+
+    if len(objects) == 1:
+        objects = objects[0]
+
+        # For pan control
+        objWidth = objects[2]
+        xCornerPos = objects[0]
+        objWidthHalf = objWidth / 2
+        xPos = xCornerPos + objWidthHalf
+
+        # For tilt control
+        objHeight = objects[3]
+        yCornerPos = objects[1]
+        objHeightHalf = objHeight / 2
+        yPos = yCornerPos + objHeightHalf
+
+        if xPos != 120:
+            xPosErr = 120 - xPos
+            xPosErrGain = 1.2
+            xPosToPulse = int(xPosToPulse + xPosErrGain*xPosErr)
+            s1.pulse_width(xPosToPulse) # 0deg: 500, +45deg: +500 pulses, 180deg: 2500
+
+        if yPos != 80:
+            yPosErr = 80 - yPos
+            yPosErrGain = 1.5
+            yPosToPulse = int(yPosToPulse - yPosErrGain*yPosErr)
+            s2.pulse_width(yPosToPulse) # 0deg: 500, +45deg: +500 pulses, 180deg: 2500
+
+        print("pan error:", yPosErr, "          ", "tilt error:", xPosErr)
+
